@@ -23,11 +23,11 @@ export default function (app: any) {
     ((msg: string) => {
       console.error(msg)
     })
-  const debug =
-    app.debug ||
-    ((msg: string) => {
-      console.log(msg)
-    })
+  // const debug =
+    // app.debug ||
+    // ((msg: string) => {
+      // console.log(msg)
+    // })
 
   let lastProps: any
   let unsubscribes: any = []
@@ -36,17 +36,20 @@ export default function (app: any) {
   let activeNotifications: any = {}
   let stateSoundMappings: any
   let statePriorityMapping: any = ['warn', 'alert', 'alarm', 'emergency']
+  let skPathForAlarm: any
+  
 
   const plugin: Plugin = {
     start: function (props: any) {
+      app.debug('Plugin starting');
       lastProps = props
       //sendCommand("MODE DS")
-      setTimeout(() => {
-        sendCommand(`BANK ${props.bank}`)
-        setTimeout(() => {
-          sendCommand(`VOLUME ${props.volume}`)
-        }, 1000)
-      }, 5000)
+      // setTimeout(() => {
+        // sendCommand(`BANK ${props.bank}`)
+        // setTimeout(() => {
+          // sendCommand(`VOLUME ${props.volume}`)
+        // }, 1000)
+      // }, 5000)
 
       stateSoundMappings = {
         alert: props.alertSound,
@@ -54,8 +57,10 @@ export default function (app: any) {
         alarm: props.alarmSound,
         emergency: props.emergencySound
       }
+      skPathForAlarm = props.SKPath;
 
       subscribeToAlarms()
+      app.setPluginStatus('started');
     },
 
     stop: function () {
@@ -73,12 +78,12 @@ export default function (app: any) {
     schema: {
       type: 'object',
       properties: {
-        deviceAddress: {
+       /*
+       deviceAddress: {
           type: 'number',
           title: 'N2K Address',
           default: 67
         },
-        /*
         mode: {
           type: 'string',
           title: 'Mode',
@@ -86,7 +91,6 @@ export default function (app: any) {
           enumNames: ['Man Over Board', 'Digital Switching', 'Engine' ],
           default: 'DS'
         },
-        */
         bank: {
           type: 'number',
           title: 'Digital Switching Bank',
@@ -97,9 +101,16 @@ export default function (app: any) {
           title: 'Volume',
           default: 40
         },
+        */
+        SKPath: {
+          type: 'string',
+          title: 'SignalK Alarm Path',
+          description: 'Signal K path used to put number for alarm type',
+          default: 'Alarm.playAlarmNr'
+        },
         warnSound: {
           type: 'number',
-          title: 'Warning Sound',
+          title: 'Warning Sound test',
           description: 'Zero for no sound',
           default: 1
         },
@@ -161,6 +172,7 @@ export default function (app: any) {
 
   function gotDelta (notification: any) {
     let changed = false
+    app.debug('delta received ')
     notification.updates.forEach(function (update: any) {
       update.values.forEach(function (value: any) {
         if (
@@ -206,7 +218,7 @@ export default function (app: any) {
         }
       ]
     }
-
+    app.debug('subscribing ')
     app.subscriptionmanager.subscribe(
       command,
       unsubscribes,
@@ -217,50 +229,43 @@ export default function (app: any) {
     )
   }
 
-  function sendCommand (command: string) {
-    const pgn = {
-      pgn: 126208,
-      PGN: 126998,
-      dst: lastProps.deviceAddress,
-      'Function Code': 'Command',
-      '# of Parameters': 1,
-      list: [
-        {
-          Parameter: 2,
-          Value: `YD:${command}`
-        }
-      ]
-    }
-    app.debug('send command %j', pgn)
-    app.emit('nmea2000JsonOut', pgn)
-  }
+  // function sendCommand (command: number) {
+// /*     const pgn = {
+      // pgn: 126208,
+      // PGN: 126998,
+      // dst: lastProps.deviceAddress,
+      // 'Function Code': 'Command',
+      // '# of Parameters': 1,
+      // list: [
+        // {
+          // Parameter: 2,
+          // Value: `YD:${command}`
+        // }
+      // ]
+    // } */
+  
+// //    app.debug('send command %j', pgn)
+// //    app.emit('nmea2000JsonOut', pgn)
+  // }
 
   function sendAllOff () {
-    const pgn: any = {
-      pgn: 127502,
-      dst: lastProps.deviceAddress,
-      'Switch Bank Instance': lastProps.bank,
-      "Instance": lastProps.bank
-    }
-
-    for (let i: number = 1; i < 29; i++) {
-      pgn[`Switch${i}`] = 'Off'
-    }
-    app.emit('nmea2000JsonOut', pgn)
+    playSound(0)
   }
 
   function playSound (sound: number) {
-    const pgn: any = {
-      pgn: 127502,
-      dst: lastProps.deviceAddress,
-      'Switch Bank Instance': lastProps.bank,
-      "Instance": lastProps.bank
-    }
-    
-    for (let i: number = 1; i < 29; i++) {
-      pgn[`Switch${i}`] = i == sound ? 'On' : 'Off'
-    }
-    app.emit('nmea2000JsonOut', pgn)
+   app.debug('Playing sound %d', sound)
+  app.handleMessage('signalk-yd-alarm-button', {
+      updates: [
+        {
+          values: [
+            {
+              path: skPathForAlarm,
+              value: sound.toString()
+            }
+          ]
+        }
+      ]
+    })
   }
 
   function updateSound() {
